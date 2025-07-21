@@ -2,6 +2,18 @@ import gi
 gi.require_version('Gst', '1.0')
 from gi.repository import Gst, GLib
 
+toptext_str = "UDP A.B.C.D port EEEE | ONLY h264"
+bottomtext_str = "No NSFW plz | Output resolution is 800x600 | running by CHANGEME and Gstreamer"
+novideotext_str = "NOVIDEO0)0))"
+toptext_font = "impact"
+bottomtext_font = "impact"
+novideotext_font = "arial"
+
+resize_cups = "video/x-raw,width=800,height=600,pixel-aspect-ratio=(fraction)1/1"
+fallback_timeout = 5 #seconds!11!!!!
+listen_port = 5000
+listen_host = "0.0.0.0"
+
 Gst.init(None)
 
 pipeline = Gst.Pipeline.new("h264flut")
@@ -27,8 +39,8 @@ novideotext = Gst.ElementFactory.make("textoverlay","novideotext")
 output = Gst.ElementFactory.make("autovideosink","GUI_output")
 
 #setup uall
-udp_src.set_property("port",5000)
-udp_src.set_property("uri","udp://0.0.0.0:5000")
+udp_src.set_property("port",listen_port)
+udp_src.set_property("uri",f"udp://{listen_host}:{listen_port}")
 
 input_queue.set_property("leaky",2)
 
@@ -37,21 +49,21 @@ input_time_overlay.set_property("font-desc","arial")
 input_time_overlay.set_property("auto-resize",True)
 input_time_overlay.set_property("datetime-format","%t")
 
-rescale_input.set_property("caps",Gst.Caps.from_string("video/x-raw,width=800,height=600,pixel-aspect-ratio=(fraction)1/1"))
+rescale_input.set_property("caps",Gst.Caps.from_string(resize_cups))
 
 last_input_frame_freeze.set_property("is-live",True)
 last_input_frame_freeze.set_property("allow-replace",True)
 
-bottomtext.set_property("font-desc","impact")
-bottomtext.set_property("text","No NSFW plz | Output resolution is 800x600 | running by CHANGEME and Gstreamer")
+bottomtext.set_property("font-desc",bottomtext_font)
+bottomtext.set_property("text",bottomtext_str)
 bottomtext.set_property("auto-resize",False)
 bottomtext.set_property("halignment",5)
 bottomtext.set_property("valignment",5)
 bottomtext.set_property("xpos",0.5)
 bottomtext.set_property("ypos",0.98)
 
-toptext.set_property("font-desc","impact")
-toptext.set_property("text","UDP A.B.C.D port EEEE | ONLY h264")
+toptext.set_property("font-desc",toptext_font)
+toptext.set_property("text",toptext_str)
 toptext.set_property("auto-resize",False)
 toptext.set_property("halignment",5)
 toptext.set_property("valignment",5)
@@ -61,15 +73,17 @@ toptext.set_property("ypos",0.018)
 black_screen_src.set_property("pattern",2)
 black_screen_src.set_property("is-live",True)
 
-rescale_blank.set_property("caps",Gst.Caps.from_string("video/x-raw,width=800,height=600,pixel-aspect-ratio=(fraction)1/1"))
+rescale_blank.set_property("caps",Gst.Caps.from_string(resize_cups))
 
-novideotext.set_property("font-desc","arial")
-novideotext.set_property("text","NOVIDEO0)0))")
+novideotext.set_property("font-desc",novideotext_font)
+novideotext.set_property("text",novideotext_str)
 novideotext.set_property("auto-resize",False)
 novideotext.set_property("halignment",5)
 novideotext.set_property("valignment",5)
 novideotext.set_property("xpos",0.5)
 novideotext.set_property("ypos",0.5)
+novideo_switch.set_property("immediate-fallback",True)
+novideo_switch.set_property("timeout",fallback_timeout * 1000000000)
 
 pipeline.add(udp_src)
 pipeline.add(capsfilter)
