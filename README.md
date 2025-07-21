@@ -30,3 +30,10 @@ textoverlay named `bottomtext` and `toptext` overlays on any received video
 <br>`server_listen_port` - TCP Server listen port
 <br>`server_listen_host` - TCP Server listen host
 <br>`nogui` - Use GUI?
+
+## Dependencies
+
+gst-plugins-good<br>
+gst-plugins-base<br>
+gst-plugin-fallbackswitch<br>
+gst-libav<br>
