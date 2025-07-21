@@ -2,23 +2,24 @@ import gi
 gi.require_version('Gst', '1.0')
 from gi.repository import Gst, GLib
 
-toptext_str = "UDP A.B.C.D port EEEE | ONLY h264"
-bottomtext_str = "No NSFW plz | Output resolution is 800x600 | running by CHANGEME and Gstreamer"
-novideotext_str = "NOVIDEO0)0))"
-toptext_font = "impact"
-bottomtext_font = "impact"
-novideotext_font = "arial"
-video_width = 800
-video_height = 600
 
-resize_cups = f"video/x-raw,width={video_width},height={video_height},pixel-aspect-ratio=(fraction)1/1"
-fallback_timeout = 5 #seconds!11!!!!
-
+video_width = 1920
+video_height = 1080
 listen_port = 5000
 listen_host = "0.0.0.0"
 server_listen_port = 5001
 server_listen_host = "0.0.0.0"
 nogui = False
+
+toptext_str = f"UDP {listen_host} port {listen_port} | ONLY h264"
+bottomtext_str = f"No NSFW plz | Output resolution is {video_width}x{video_height} | running by CHANGEME and Gstreamer"
+novideotext_str = "NOVIDEO0)0))"
+toptext_font = "impact"
+bottomtext_font = "impact"
+novideotext_font = "arial"
+
+resize_cups = f"video/x-raw,width={video_width},height={video_height},pixel-aspect-ratio=(fraction)1/1"
+fallback_timeout = 5 #seconds!11!!!!
 
 Gst.init(None)
 
