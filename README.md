@@ -1,10 +1,13 @@
 # h264flut
+
 pixelflut but with h264 and GStreamer<br><br>
 Default resolution is 800x600<br>
 Default codec is h264<br>
 Currently no audio support
 <br>
-# How it works<br>
+
+## How it works<br>
+
 Client runs `ffmpeg -re -f lavfi -i testsrc -vf "scale=800:600" -c:v libx264 -f rtp udp://A.B.C.D:EEEE` (for example)<br>
 RTP H264 Traffic goes to `A.B.C.D:EEEE`<br>
 GStreamer pipeline receives it, triggering fallback switch and shows it on autovideosink (replaceable)<br>
