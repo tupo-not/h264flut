@@ -11,8 +11,12 @@ novideotext_font = "arial"
 
 resize_cups = "video/x-raw,width=800,height=600,pixel-aspect-ratio=(fraction)1/1"
 fallback_timeout = 5 #seconds!11!!!!
+
 listen_port = 5000
 listen_host = "0.0.0.0"
+server_listen_port = 5001
+server_listen_host = "0.0.0.0"
+nogui = False
 
 Gst.init(None)
 
@@ -28,7 +32,7 @@ input_time_overlay = Gst.ElementFactory.make("timeoverlay","input_time_overlay")
 prerescale_input = Gst.ElementFactory.make("videoscale","prerescale_input")
 rescale_input = Gst.ElementFactory.make("capsfilter","rescale_input")
 novideo_switch = Gst.ElementFactory.make("fallbackswitch","novideo_switch")
-last_input_frame_freeze = Gst.ElementFactory.make("imagefreeze","last_input_frame_freeze")
+last_in_pic_frz = Gst.ElementFactory.make("imagefreeze","last_in_pic_frz")
 bottomtext = Gst.ElementFactory.make("textoverlay","bottomtext")
 toptext = Gst.ElementFactory.make("textoverlay","toptext")
 black_screen_src = Gst.ElementFactory.make("videotestsrc","black_screen_src")
@@ -36,7 +40,13 @@ prerescale_blank = Gst.ElementFactory.make("videoscale","prerescale_blank")
 rescale_blank = Gst.ElementFactory.make("capsfilter","rescale_blank")
 novideotext = Gst.ElementFactory.make("textoverlay","novideotext")
 
-output = Gst.ElementFactory.make("autovideosink","GUI_output")
+if nogui:
+    mjpeg_encode = Gst.ElementFactory.make("avenc_mjpeg","mjpeg_encode")
+    output = Gst.ElementFactory.make("tcpserversink","GUI_output")
+else:
+    output = Gst.ElementFactory.make("autovideosink","GUI_output")
+
+
 
 #setup uall
 udp_src.set_property("port",listen_port)
@@ -51,8 +61,8 @@ input_time_overlay.set_property("datetime-format","%t")
 
 rescale_input.set_property("caps",Gst.Caps.from_string(resize_cups))
 
-last_input_frame_freeze.set_property("is-live",True)
-last_input_frame_freeze.set_property("allow-replace",True)
+last_in_pic_frz.set_property("is-live",True)
+last_in_pic_frz.set_property("allow-replace",True)
 
 bottomtext.set_property("font-desc",bottomtext_font)
 bottomtext.set_property("text",bottomtext_str)
@@ -84,6 +94,9 @@ novideotext.set_property("xpos",0.5)
 novideotext.set_property("ypos",0.5)
 novideo_switch.set_property("immediate-fallback",True)
 novideo_switch.set_property("timeout",fallback_timeout * 1000000000)
+if nogui:
+    output.set_property("port",server_listen_port)
+    output.set_property("host",server_listen_host)
 
 pipeline.add(udp_src)
 pipeline.add(capsfilter)
@@ -94,13 +107,15 @@ pipeline.add(input_time_overlay)
 pipeline.add(prerescale_input)
 pipeline.add(rescale_input)
 pipeline.add(novideo_switch)
-pipeline.add(last_input_frame_freeze)
+pipeline.add(last_in_pic_frz)
 pipeline.add(bottomtext)
 pipeline.add(toptext)
 pipeline.add(black_screen_src)
 pipeline.add(prerescale_blank)
 pipeline.add(rescale_blank)
 pipeline.add(novideotext)
+if nogui:
+    pipeline.add(mjpeg_encode)
 pipeline.add(output)
 
 udp_src.link(capsfilter)
@@ -111,16 +126,26 @@ h264_decode.link(prerescale_input)
 prerescale_input.link(rescale_input)
 rescale_input.link(input_time_overlay)
 input_time_overlay.link(novideo_switch)
-novideo_switch.link(last_input_frame_freeze)
-last_input_frame_freeze.link(toptext)
+novideo_switch.link(last_in_pic_frz)
+last_in_pic_frz.link(toptext)
 toptext.link(bottomtext)
-bottomtext.link(output)
-#input_time_overlay.link(output)
+
+#TOPOLOGY
+#udp_src > capfilter > rtp_depay > input_queue > h264_decode > 
+#> prerescale_input > rescale_input > input_time_overlay >
+#> novideo_switch > last_in_pic_frz > toptext >
+if nogui:
+    bottomtext.link(mjpeg_encode)
+    mjpeg_encode.link(output) # toptext > mjpeg_encode > tcpserversink
+else:
+    bottomtext.link(output) # toptext > autovideosink
 
 black_screen_src.link(prerescale_blank)
 prerescale_blank.link(rescale_blank)
 rescale_blank.link(novideotext)
 novideotext.link(novideo_switch)
+#ONE MORE TOPOLOGY
+#black_screen_src > prerescale_blank > rescale_blank > novideotext
 
 pipeline.set_state(Gst.State.PLAYING)
 
