@@ -8,8 +8,10 @@ novideotext_str = "NOVIDEO0)0))"
 toptext_font = "impact"
 bottomtext_font = "impact"
 novideotext_font = "arial"
+video_width = 800
+video_height = 600
 
-resize_cups = "video/x-raw,width=800,height=600,pixel-aspect-ratio=(fraction)1/1"
+resize_cups = f"video/x-raw,width={video_width},height={video_height},pixel-aspect-ratio=(fraction)1/1"
 fallback_timeout = 5 #seconds!11!!!!
 
 listen_port = 5000
