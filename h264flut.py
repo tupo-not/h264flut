@@ -2,9 +2,8 @@ import gi
 gi.require_version('Gst', '1.0')
 from gi.repository import Gst, GLib
 
-
-video_width = 1920
-video_height = 1080
+video_width = 800
+video_height = 600
 listen_port = 5000
 listen_host = "0.0.0.0"
 server_listen_port = 5001
