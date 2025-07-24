@@ -37,4 +37,4 @@ gst-plugins-good<br>
 gst-plugins-base<br>
 gst-plugin-fallbackswitch<br>
 gst-libav<br>
-pip3 gst package 
+gst-python
