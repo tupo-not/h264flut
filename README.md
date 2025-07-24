@@ -11,7 +11,7 @@ Currently no audio support
 Client runs `ffmpeg -re -f lavfi -i testsrc -vf "scale=800:600" -c:v libx264 -f rtp udp://A.B.C.D:EEEE` (for example)<br>
 RTP H264 Traffic goes to `A.B.C.D:EEEE`<br>
 GStreamer pipeline receives it, triggering fallback switch and shows it on autovideosink (replaceable)<br>
-If in 5 seconds `(fallback_timeout var in script)` pipeline dont receive at least one frame, fallbackswitch shows screen with "NOVIDEO0)0))" `(novideotext_str str in script)`<br><br>
+If in 5 seconds `(fallback_timeout in config, or -t option)` pipeline dont receive at least one frame, fallbackswitch shows screen with "NOVIDEO0)0))" `(novideotext in config, or --novideotext option)`<br><br>
 textoverlay named `bottomtext` and `toptext` overlays on any received video
 <br>
 
