@@ -7,8 +7,8 @@ config.read("config.ini")
 import argparse 
 parser = argparse.ArgumentParser()
 
-parser.add_argument('-vw', required=False, type=int, help="Video Width")
-parser.add_argument('-vh', required=False, type=int, help="Video Height")
+parser.add_argument('--vw', required=False, type=int, help="Video Width")
+parser.add_argument('--vh', required=False, type=int, help="Video Height")
 parser.add_argument('--uport', required=False, type=int, help="UDP Listen port")
 parser.add_argument('--uhost', required=False, type=str, help="UDP Listen host")
 parser.add_argument('--watch_port', required=False, type=int, help="TCP Server Listen port")
@@ -25,16 +25,16 @@ args = parser.parse_args()
 fallback_timeout = 5 #seconds!11!!!!
 
 #apply uall
+#\/DAT'S DEFAULT!11!1!!!!!
 video_width = 800
 video_height = 600
 listen_port = 5000
 listen_host = "0.0.0.0"
-server_listen_port = 5001
+server_listen_port = 5000
 server_listen_host = "0.0.0.0"
 nogui = False
-
-toptext_str = f"UDP {listen_host} port {listen_port} | ONLY h264"
-bottomtext_str = f"No NSFW plz | Output resolution is {video_width}x{video_height} | running by CHANGEME and Gstreamer"
+toptext_str = f"ONLY h264"
+bottomtext_str = f"No NSFW plz | running by CHANGEME and Gstreamer"
 novideotext_str = "NOVIDEO0)0))"
 toptext_font = "impact"
 bottomtext_font = "impact"
