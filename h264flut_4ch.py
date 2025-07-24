@@ -57,10 +57,9 @@ else:
 #setup uall
 i = 0
 for channel in ch:
-    print(channel)
     i += 1
-    channel.udpsrc.set_property("port",listen_base_port+i)
-    channel.udpsrc.set_property("uri",f"udp://{listen_host}:{listen_base_port}")
+    channel.udpsrc.set_property("port",listen_base_port+(i-1))
+    channel.udpsrc.set_property("uri",f"udp://{listen_host}:{listen_base_port+(i-1)}")
     channel.queue.set_property("leaky",2)
     channel.rescale.set_property("caps",Gst.Caps.from_string(resize_cups))
     channel.imgfrz.set_property("is-live",True)
@@ -91,6 +90,21 @@ novideotext.set_property("halignment",5)
 novideotext.set_property("valignment",5)
 novideotext.set_property("xpos",0.5)
 novideotext.set_property("ypos",0.5)
+pad0 = videomixer.get_request_pad("sink_%u")  # Автоматически выбирает свободный sink
+pad0.set_property("xpos", 0)
+pad0.set_property("ypos", 0)
+
+pad1 = videomixer.get_request_pad("sink_%u")
+pad1.set_property("xpos", 800)
+pad1.set_property("ypos", 0)
+
+pad2 = videomixer.get_request_pad("sink_%u")
+pad2.set_property("xpos", 0)
+pad2.set_property("ypos", 600)
+
+pad3 = videomixer.get_request_pad("sink_%u")
+pad3.set_property("xpos", 800)
+pad3.set_property("ypos", 600)
 
 #add uall
 
