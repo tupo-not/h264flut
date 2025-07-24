@@ -1,24 +1,12 @@
 import gi
+import configparser
+config = configparser.ConfigParser()
+config.read("config.ini")
+
 gi.require_version('Gst', '1.0')
 from gi.repository import Gst, GLib
 
-video_width = 800
-video_height = 600
-listen_port = 5000
-listen_host = "0.0.0.0"
-server_listen_port = 5001
-server_listen_host = "0.0.0.0"
-nogui = False
-
-toptext_str = f"UDP {listen_host} port {listen_port} | ONLY h264"
-bottomtext_str = f"No NSFW plz | Output resolution is {video_width}x{video_height} | running by CHANGEME and Gstreamer"
-novideotext_str = "NOVIDEO0)0))"
-toptext_font = "impact"
-bottomtext_font = "impact"
-novideotext_font = "arial"
-
-resize_cups = f"video/x-raw,width={video_width},height={video_height},pixel-aspect-ratio=(fraction)1/1"
-fallback_timeout = 5 #seconds!11!!!!
+resize_cups = f"video/x-raw,width={config["Video"]["width"]},height={config["Video"]["height"]},pixel-aspect-ratio=(fraction)1/1"
 
 Gst.init(None)
 
@@ -42,17 +30,15 @@ prerescale_blank = Gst.ElementFactory.make("videoscale","prerescale_blank")
 rescale_blank = Gst.ElementFactory.make("capsfilter","rescale_blank")
 novideotext = Gst.ElementFactory.make("textoverlay","novideotext")
 
-if nogui:
+if config["Video"]["nogui"].lower() == 'y':
     mjpeg_encode = Gst.ElementFactory.make("avenc_mjpeg","mjpeg_encode")
     output = Gst.ElementFactory.make("tcpserversink","GUI_output")
 else:
     output = Gst.ElementFactory.make("autovideosink","GUI_output")
 
-
-
 #setup uall
-udp_src.set_property("port",listen_port)
-udp_src.set_property("uri",f"udp://{listen_host}:{listen_port}")
+udp_src.set_property("port",int(config["Net"]["listen_port"]))
+udp_src.set_property("uri",f"udp://{config["Net"]["listen_host"]}:{config["Net"]["listen_port"]}")
 
 input_queue.set_property("leaky",2)
 
@@ -66,16 +52,16 @@ rescale_input.set_property("caps",Gst.Caps.from_string(resize_cups))
 last_in_pic_frz.set_property("is-live",True)
 last_in_pic_frz.set_property("allow-replace",True)
 
-bottomtext.set_property("font-desc",bottomtext_font)
-bottomtext.set_property("text",bottomtext_str)
+bottomtext.set_property("font-desc",config["Text"]["bottomtext_font"])
+bottomtext.set_property("text",config["Text"]["bottomtext"])
 bottomtext.set_property("auto-resize",False)
 bottomtext.set_property("halignment",5)
 bottomtext.set_property("valignment",5)
 bottomtext.set_property("xpos",0.5)
 bottomtext.set_property("ypos",0.98)
 
-toptext.set_property("font-desc",toptext_font)
-toptext.set_property("text",toptext_str)
+toptext.set_property("font-desc",config["Text"]["toptext_font"])
+toptext.set_property("text",config["Text"]["toptext"])
 toptext.set_property("auto-resize",False)
 toptext.set_property("halignment",5)
 toptext.set_property("valignment",5)
@@ -87,18 +73,18 @@ black_screen_src.set_property("is-live",True)
 
 rescale_blank.set_property("caps",Gst.Caps.from_string(resize_cups))
 
-novideotext.set_property("font-desc",novideotext_font)
-novideotext.set_property("text",novideotext_str)
+novideotext.set_property("font-desc",config["Text"]["novideotext_font"])
+novideotext.set_property("text",config["Text"]["novideotext"])
 novideotext.set_property("auto-resize",False)
 novideotext.set_property("halignment",5)
 novideotext.set_property("valignment",5)
 novideotext.set_property("xpos",0.5)
 novideotext.set_property("ypos",0.5)
 novideo_switch.set_property("immediate-fallback",True)
-novideo_switch.set_property("timeout",fallback_timeout * 1000000000)
-if nogui:
-    output.set_property("port",server_listen_port)
-    output.set_property("host",server_listen_host)
+novideo_switch.set_property("timeout",int(config["Video"]["fallback_timeout"]) * 1000000000)
+if config["Video"]["nogui"].lower() == 'y':
+    output.set_property("port",int(config["Net"]["server_listen_port"]))
+    output.set_property("host",config["Net"]["server_listen_host"])
 
 pipeline.add(udp_src)
 pipeline.add(capsfilter)
@@ -116,7 +102,7 @@ pipeline.add(black_screen_src)
 pipeline.add(prerescale_blank)
 pipeline.add(rescale_blank)
 pipeline.add(novideotext)
-if nogui:
+if config["Video"]["nogui"].lower() == 'y':
     pipeline.add(mjpeg_encode)
 pipeline.add(output)
 
@@ -136,7 +122,7 @@ toptext.link(bottomtext)
 #udp_src > capfilter > rtp_depay > input_queue > h264_decode > 
 #> prerescale_input > rescale_input > input_time_overlay >
 #> novideo_switch > last_in_pic_frz > toptext >
-if nogui:
+if config["Video"]["nogui"].lower() == 'y':
     bottomtext.link(mjpeg_encode)
     mjpeg_encode.link(output) # toptext > mjpeg_encode > tcpserversink
 else:
@@ -149,12 +135,22 @@ novideotext.link(novideo_switch)
 #ONE MORE TOPOLOGY
 #black_screen_src > prerescale_blank > rescale_blank > novideotext
 
-pipeline.set_state(Gst.State.PLAYING)
+def handle_gstreamer_message(_bus: Gst.Bus, message: Gst.Message, loop: GLib.MainLoop):
+    message_type = message.type
+    if message_type == Gst.MessageType.ERROR:
+        err, debug = message.parse_error()
+        print(err, debug)
 
 try:
+    bus = pipeline.get_bus()
+    bus.add_signal_watch()
+    pipeline.set_state(Gst.State.PLAYING)
     loop = GLib.MainLoop()
+    bus.connect('message', handle_gstreamer_message, loop)
     loop.run()
 except KeyboardInterrupt:
     print("\nStopping...")
+except GLib.Error as e:
+    print(e)
 finally:
     pipeline.set_state(Gst.State.NULL)

@@ -15,21 +15,20 @@ If in 5 seconds `(fallback_timeout var in script)` pipeline dont receive at leas
 textoverlay named `bottomtext` and `toptext` overlays on any received video
 <br>
 
-## Some options in script
-`toptext_str` - Top Text string value
-<br>`bottomtext_str` - Bottom Text string value
-<br>`novideotext_str` - No video text string value
-<br>`toptext_font` - Top Text Font
-<br>`bottomtext_font` - Bottom Text Font
-<br>`novideotext_font` - No video Text Font
-<br>`video_width` - Result video width
-<br>`video_height` - Result video height
-<br>`fallback_timeout` - Fallback switch timeout
-<br>`listen_port` - UDP Listen port
-<br>`listen_host` - UDP Listen host
-<br>`server_listen_port` - TCP Server listen port
-<br>`server_listen_host` - TCP Server listen host
-<br>`nogui` - Use GUI?
+## Some options in config.ini
+#### Video<br>
+ width - Output video width<br>
+ height - Output video height<br>
+ nogui - Will server use GUI? (y or n)<br>
+ fallback_timeout - Fallback switch timeout, in seconds
+
+#### Text<br>
+ toptext - Top Text value<br>
+ bottomtext - Bottom Text value<br>
+ novideotext - novideo Placeholder Text value<br>
+ toptext_font - Top Text font<br>
+ bottomtext_font - Bottom Text font<br>
+ novideotext_font - novideo Placeholder Text font<br>
 
 ## Dependencies
 
