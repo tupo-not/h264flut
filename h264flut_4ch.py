@@ -43,7 +43,8 @@ class GstChannel: #хигад's code
 ch = [GstChannel(i) for i in range(4)]
 toptext = Gst.ElementFactory.make("textoverlay","toptext")
 bottomtext = Gst.ElementFactory.make("textoverlay","bottomtext")
-videomixer = Gst.ElementFactory.make("glvideomixer","videomixer")
+videomixer = Gst.ElementFactory.make("videomixer","videomixer")
+convert = Gst.ElementFactory.make("videoconvert","convert")
 
 if nogui:
     mjpeg_encode = Gst.ElementFactory.make("avenc_mjpeg","mjpeg_encode")
@@ -104,7 +105,6 @@ pad3.set_property("xpos", 800)
 pad3.set_property("ypos", 600)
 
 #add uall
-
 for channel in ch:
     pipeline.add(channel.udpsrc)
     pipeline.add(channel.cfilter)
@@ -119,6 +119,7 @@ for channel in ch:
     pipeline.add(channel.testsrc)
     pipeline.add(channel.novideotext)
 
+pipeline.add(convert)
 pipeline.add(bottomtext)
 pipeline.add(videomixer)
 
@@ -141,11 +142,13 @@ for channel in ch: #LINK CHANNELS~
     channel.toptext.link(videomixer)
     
 if nogui:
-    videomixer.link(bottomtext)
+    videomixer.link(convert)
+    convert.link(bottomtext)
     bottomtext.link(mjpeg_encode)
     mjpeg_encode.link(output)
 else:
-    videomixer.link(bottomtext)
+    videomixer.link(convert)
+    convert.link(bottomtext)
     bottomtext.link(output)
 
 
