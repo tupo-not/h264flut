@@ -6,7 +6,7 @@ listen_base_port = 5000
 listen_host = "0.0.0.0"
 server_listen_port = 5000
 server_listen_host = "0.0.0.0"
-nogui = False
+nogui = True
 toptext_str = f"ONLY h264"
 bottomtext_str = f"No NSFW plz | running by CHANGEME and Gstreamer"
 novideotext_str = "NOVIDEO0)0))"
@@ -141,6 +141,7 @@ for channel in ch: #LINK CHANNELS~
     channel.toptext.link(videomixer)
     
 if nogui:
+    videomixer.link(bottomtext)
     bottomtext.link(mjpeg_encode)
     mjpeg_encode.link(output)
 else:
