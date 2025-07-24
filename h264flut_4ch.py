@@ -17,7 +17,7 @@ resize_cups = f"video/x-raw,width=800,height=600,pixel-aspect-ratio=(fraction)1/
 fallback_timeout = 5 #seconds!11!!!!
 
 Gst.init(None)
-pipeline = Gst.Pipeline.new("h264flut")
+pipeline = Gst.Pipeline.new("h264flut_4channel")
 class GstChannel: #хигад's code
     def __init__(self, ch_id: int):
         self.id = ch_id
@@ -32,6 +32,8 @@ class GstChannel: #хигад's code
         self.fallback = self.make("fallbackswitch", "fallback")
         self.imgfrz = self.make("imagefreeze", "imgfrz")
         self.toptext = self.make("textoverlay", "toptext")
+        self.testsrc = self.make("videotestsrc", "testsrc")
+        self.novideotext = self.make("textoverlay","novideotext")
 
     def make(self, factory_name, prefix):
         name = f"{prefix}{self.name_suffix}"
@@ -42,9 +44,6 @@ ch = [GstChannel(i) for i in range(4)]
 toptext = Gst.ElementFactory.make("textoverlay","toptext")
 bottomtext = Gst.ElementFactory.make("textoverlay","bottomtext")
 videomixer = Gst.ElementFactory.make("glvideomixer","videomixer")
-black_screen_src = Gst.ElementFactory.make("videotestsrc","black_screen_src")
-novideotext = Gst.ElementFactory.make("textoverlay","novideotext")
-blank_tee = Gst.ElementFactory.make("tee","blank_tee")
 
 if nogui:
     mjpeg_encode = Gst.ElementFactory.make("avenc_mjpeg","mjpeg_encode")
@@ -73,9 +72,17 @@ for channel in ch:
     channel.toptext.set_property("ypos",0.018)
     channel.fallback.set_property("immediate-fallback",True)
     channel.fallback.set_property("timeout",fallback_timeout * 1000000000)
+    channel.testsrc.set_property("pattern",2)
+    channel.testsrc.set_property("is-live",True)
+    channel.novideotext.set_property("font-desc",novideotext_font)
+    channel.novideotext.set_property("text",novideotext_str)
+    channel.novideotext.set_property("auto-resize",False)
+    channel.novideotext.set_property("halignment",5)
+    channel.novideotext.set_property("valignment",5)
+    channel.novideotext.set_property("xpos",0.5)
+    channel.novideotext.set_property("ypos",0.5)
 
-black_screen_src.set_property("pattern",2)
-black_screen_src.set_property("is-live",True)
+
 bottomtext.set_property("font-desc",bottomtext_font)
 bottomtext.set_property("text",bottomtext_str)
 bottomtext.set_property("auto-resize",False)
@@ -83,26 +90,16 @@ bottomtext.set_property("halignment",5)
 bottomtext.set_property("valignment",5)
 bottomtext.set_property("xpos",0.5)
 bottomtext.set_property("ypos",0.98)
-novideotext.set_property("font-desc",novideotext_font)
-novideotext.set_property("text",novideotext_str)
-novideotext.set_property("auto-resize",False)
-novideotext.set_property("halignment",5)
-novideotext.set_property("valignment",5)
-novideotext.set_property("xpos",0.5)
-novideotext.set_property("ypos",0.5)
-pad0 = videomixer.get_request_pad("sink_%u")  # Автоматически выбирает свободный sink
+pad0 = videomixer.get_request_pad("sink_%u")
+pad1 = videomixer.get_request_pad("sink_%u")
+pad2 = videomixer.get_request_pad("sink_%u")
+pad3 = videomixer.get_request_pad("sink_%u")
 pad0.set_property("xpos", 0)
 pad0.set_property("ypos", 0)
-
-pad1 = videomixer.get_request_pad("sink_%u")
 pad1.set_property("xpos", 800)
 pad1.set_property("ypos", 0)
-
-pad2 = videomixer.get_request_pad("sink_%u")
 pad2.set_property("xpos", 0)
 pad2.set_property("ypos", 600)
-
-pad3 = videomixer.get_request_pad("sink_%u")
 pad3.set_property("xpos", 800)
 pad3.set_property("ypos", 600)
 
@@ -119,18 +116,15 @@ for channel in ch:
     pipeline.add(channel.fallback)
     pipeline.add(channel.imgfrz)
     pipeline.add(channel.toptext)
-pipeline.add(black_screen_src)
-pipeline.add(blank_tee)
+    pipeline.add(channel.testsrc)
+    pipeline.add(channel.novideotext)
+
 pipeline.add(bottomtext)
-pipeline.add(novideotext)
 pipeline.add(videomixer)
 
 if nogui:
     pipeline.add(mjpeg_encode)
 pipeline.add(output)
-
-black_screen_src.link(novideotext)
-novideotext.link(blank_tee)
 
 for channel in ch: #LINK CHANNELS~
     channel.udpsrc.link(channel.cfilter)
@@ -138,9 +132,8 @@ for channel in ch: #LINK CHANNELS~
     channel.depay.link(channel.queue)
     channel.queue.link(channel.decode)
     channel.decode.link(channel.fallback)
-    #add blank src
-    blank_tee.link(channel.fallback)
-    #
+    channel.testsrc.link(channel.novideotext)
+    channel.novideotext.link(channel.fallback)
     channel.fallback.link(channel.scale)
     channel.scale.link(channel.rescale)
     channel.rescale.link(channel.imgfrz)
