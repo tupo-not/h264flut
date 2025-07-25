@@ -3,31 +3,34 @@ gi.require_version('Gst', '1.0')
 from gi.repository import Gst, GLib
 
 listen_base_port = 5000
-listen_host = "[::]"
+listen_host = "0.0.0.0"
 server_listen_port = 5000
 server_listen_host = "::"
-nogui = False
-bottomtext_str = f"No NSFW plz | running by CHANGEME and Gstreamer"
+nogui = True
+bottomtext_str = "No NSFW plz | running by CHANGEME and Gstreamer"
 novideotext_str = "NOVIDEO0)0))"
 toptext_font = "impact"
 bottomtext_font = "impact"
 novideotext_font = "arial"
-resize_cups = f"video/x-raw,width=800,height=600,pixel-aspect-ratio=(fraction)1/1"
+resize_cups = "video/x-raw,width=800,height=600,pixel-aspect-ratio=(fraction)1/1"
+h264_caps = "application/x-rtp,media=video,encoding-name=H264,payload=96"
 fallback_timeout = 1 #seconds!11!!!!
 channels = 9
 
 Gst.init(None)
-pipeline = Gst.Pipeline.new("h264flut_4channel")
-class GstChannel: #хигад's code
+pipeline = Gst.Pipeline.new("h264flut_multichannel")
+
+class GstChannel:
     def __init__(self, ch_id: int):
         self.id = ch_id
         self.name_suffix = f"_ch{ch_id}"
         self.udpsrc = self.make("udpsrc", "udp")
         self.cfilter = self.make("capsfilter", "cfilter")
         self.depay = self.make("rtph264depay", "depay")
+        self.parse = self.make("h264parse", "parse")
         self.queue = self.make("queue", "que")
         self.decode = self.make("avdec_h264", "decode")
-        self.scale = self.make("videoscale", "scale")
+        self.scale = self.make("videoconvertscale", "scale")
         self.rescale = self.make("capsfilter", "rescale")
         self.fallback = self.make("fallbackswitch", "fallback")
         self.imgfrz = self.make("imagefreeze", "imgfrz")
@@ -57,6 +60,7 @@ else:
 #setup uall
 i = 0
 for channel in ch:
+    channel.cfilter.set_property("caps", Gst.Caps.from_string(h264_caps))
     i += 1
     channel.udpsrc.set_property("port",listen_base_port+(i-1))
     channel.udpsrc.set_property("uri",f"udp://{listen_host}:{listen_base_port+(i-1)}")
@@ -82,7 +86,6 @@ for channel in ch:
     channel.novideotext.set_property("valignment",5)
     channel.novideotext.set_property("xpos",0.5)
     channel.novideotext.set_property("ypos",0.5)
-
 
 bottomtext.set_property("font-desc",bottomtext_font)
 bottomtext.set_property("text",bottomtext_str)
@@ -120,10 +123,11 @@ pipeline.add(output)
 if nogui:
     pipeline.add(mjpeg_encode)
 
-for channel in ch: #LINK CHANNELS~
+for channel in ch:
     channel.udpsrc.link(channel.cfilter)
     channel.cfilter.link(channel.depay)
-    channel.depay.link(channel.queue)
+    channel.depay.link(channel.parse)
+    channel.parse.link(channel.queue)
     channel.queue.link(channel.decode)
     channel.decode.link(channel.fallback) 
     channel.testsrc.link(channel.novideotext)
