@@ -14,6 +14,7 @@ bottomtext_font = "impact"
 novideotext_font = "arial"
 resize_cups = f"video/x-raw,width=800,height=600,pixel-aspect-ratio=(fraction)1/1"
 fallback_timeout = 1 #seconds!11!!!!
+channels = 9
 
 Gst.init(None)
 pipeline = Gst.Pipeline.new("h264flut_4channel")
@@ -39,7 +40,7 @@ class GstChannel: #хигад's code
         return Gst.ElementFactory.make(factory_name, name)
     
 #spawn uall
-ch = [GstChannel(i) for i in range(9)]
+ch = [GstChannel(i) for i in range(channels)]
 toptext = Gst.ElementFactory.make("textoverlay","toptext")
 bottomtext = Gst.ElementFactory.make("textoverlay","bottomtext")
 videomixer = Gst.ElementFactory.make("videomixer","videomixer")
@@ -90,59 +91,34 @@ bottomtext.set_property("halignment",5)
 bottomtext.set_property("valignment",5)
 bottomtext.set_property("xpos",0.5)
 bottomtext.set_property("ypos",0.98)
-pad0 = videomixer.get_request_pad("sink_%u")
-pad1 = videomixer.get_request_pad("sink_%u")
-pad2 = videomixer.get_request_pad("sink_%u")
-pad3 = videomixer.get_request_pad("sink_%u")
-pad4 = videomixer.get_request_pad("sink_%u")
-pad5 = videomixer.get_request_pad("sink_%u")
-pad6 = videomixer.get_request_pad("sink_%u")
-pad7 = videomixer.get_request_pad("sink_%u")
-pad8 = videomixer.get_request_pad("sink_%u")
 
-pad0.set_property("xpos", 0)
-pad0.set_property("ypos", 0)
-pad1.set_property("xpos", 800)
-pad1.set_property("ypos", 0)
-pad2.set_property("xpos", 1600)
-pad2.set_property("ypos", 0)
+#silly matrix
+cols = int(channels ** 0.5) + (1 if channels ** 0.5 % 1 else 0)
+rows = (channels + cols - 1) // cols
+pads = []
 
-pad3.set_property("xpos", 0)
-pad3.set_property("ypos", 600)
-pad4.set_property("xpos", 800)
-pad4.set_property("ypos", 600)
-pad5.set_property("xpos", 1600)
-pad5.set_property("ypos", 600)
-
-pad6.set_property("xpos", 0)
-pad6.set_property("ypos", 1200)
-pad7.set_property("xpos", 800)
-pad7.set_property("ypos", 1200)
-pad8.set_property("xpos", 1600)
-pad8.set_property("ypos", 1200)
+for i in range(channels):
+    pad = videomixer.get_request_pad("sink_%u")
+    pads.append(pad)
+    x = (i % cols) * 800
+    y = (i // cols) * 600
+    pad.set_property("xpos", x)
+    pad.set_property("ypos", y)
 
 #add uall
 for channel in ch:
-    pipeline.add(channel.udpsrc)
-    pipeline.add(channel.cfilter)
-    pipeline.add(channel.depay)
-    pipeline.add(channel.queue)
-    pipeline.add(channel.decode)
-    pipeline.add(channel.scale)
-    pipeline.add(channel.rescale)
-    pipeline.add(channel.fallback)
-    pipeline.add(channel.imgfrz)
-    pipeline.add(channel.toptext)
-    pipeline.add(channel.testsrc)
-    pipeline.add(channel.novideotext)
+    attributes = vars(channel)
+    for attr_name, element in attributes.items():
+        if isinstance(element, Gst.Element):
+            pipeline.add(element)
 
 pipeline.add(convert)
 pipeline.add(bottomtext)
 pipeline.add(videomixer)
+pipeline.add(output)
 
 if nogui:
     pipeline.add(mjpeg_encode)
-pipeline.add(output)
 
 for channel in ch: #LINK CHANNELS~
     channel.udpsrc.link(channel.cfilter)
@@ -169,7 +145,7 @@ else:
     bottomtext.link(output)
 
 
-def handle_gstreamer_message(_bus: Gst.Bus, message: Gst.Message, loop: GLib.MainLoop):
+def handle_gstreamer_message(_bus: Gst.Bus, message: Gst.Message, loop: GLib.MainLoop): #debug
     message_type = message.type
     if message_type == Gst.MessageType.ERROR:
         err, debug = message.parse_error()
