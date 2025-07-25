@@ -8,10 +8,10 @@ Currently no audio support
 
 ## How it works<br>
 
-Client runs `ffmpeg -re -f lavfi -i testsrc -vf "scale=800:600" -c:v libx264 -f rtp udp://A.B.C.D:5000 + (preffered number of channel - 1)` (for example)<br>
-RTP H264 Traffic goes to `A.B.C.D:5003 (channel 4)`<br>
+Client runs `ffmpeg -re -f lavfi -i testsrc -vf "scale=800:600" -c:v libx264 -f rtp udp://A.B.C.D:5000 + (preffered number of channel)` (for example)<br>
+RTP H264 Traffic goes to `A.B.C.D:5003 (channel 3)`<br>
 GStreamer channel pipeline receives it, triggering fallback switch and shows it on channel's output<br>
-If in 5 seconds channel pipeline dont receive at least one frame, fallbackswitch shows `NOVIDEO0)0))`<br><br>
+If in 1 second(default) channel pipeline dont receive at least one frame, fallbackswitch shows `NOVIDEO0)0))`<br><br>
 <br>
 
 ## Dependencies
