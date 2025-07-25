@@ -3,9 +3,9 @@ gi.require_version('Gst', '1.0')
 from gi.repository import Gst, GLib
 
 listen_base_port = 5000
-listen_host = "0.0.0.0"
+listen_host = "[::]"
 server_listen_port = 5000
-server_listen_host = "0.0.0.0"
+server_listen_host = "[::]"
 nogui = False
 bottomtext_str = f"No NSFW plz | running by CHANGEME and Gstreamer"
 novideotext_str = "NOVIDEO0)0))"
