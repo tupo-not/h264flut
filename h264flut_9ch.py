@@ -99,6 +99,7 @@ pad5 = videomixer.get_request_pad("sink_%u")
 pad6 = videomixer.get_request_pad("sink_%u")
 pad7 = videomixer.get_request_pad("sink_%u")
 pad8 = videomixer.get_request_pad("sink_%u")
+
 pad0.set_property("xpos", 0)
 pad0.set_property("ypos", 0)
 pad1.set_property("xpos", 800)
@@ -114,11 +115,11 @@ pad5.set_property("xpos", 1600)
 pad5.set_property("ypos", 600)
 
 pad6.set_property("xpos", 0)
-pad6.set_property("ypos", 1000)
+pad6.set_property("ypos", 1200)
 pad7.set_property("xpos", 800)
-pad7.set_property("ypos", 1000)
+pad7.set_property("ypos", 1200)
 pad8.set_property("xpos", 1600)
-pad8.set_property("ypos", 1000)
+pad8.set_property("ypos", 1200)
 
 #add uall
 for channel in ch:
