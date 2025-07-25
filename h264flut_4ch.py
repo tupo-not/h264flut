@@ -7,14 +7,13 @@ listen_host = "0.0.0.0"
 server_listen_port = 5000
 server_listen_host = "0.0.0.0"
 nogui = True
-toptext_str = f"ONLY h264"
 bottomtext_str = f"No NSFW plz | running by CHANGEME and Gstreamer"
 novideotext_str = "NOVIDEO0)0))"
 toptext_font = "impact"
 bottomtext_font = "impact"
 novideotext_font = "arial"
 resize_cups = f"video/x-raw,width=800,height=600,pixel-aspect-ratio=(fraction)1/1"
-fallback_timeout = 5 #seconds!11!!!!
+fallback_timeout = 1 #seconds!11!!!!
 
 Gst.init(None)
 pipeline = Gst.Pipeline.new("h264flut_4channel")
@@ -65,7 +64,7 @@ for channel in ch:
     channel.imgfrz.set_property("is-live",True)
     channel.imgfrz.set_property("allow-replace",True)
     channel.toptext.set_property("font-desc",toptext_font)
-    channel.toptext.set_property("text",f"CH_{i}")
+    channel.toptext.set_property("text",f"CH_{i-1}")
     channel.toptext.set_property("auto-resize",False)
     channel.toptext.set_property("halignment",5)
     channel.toptext.set_property("valignment",5)
@@ -132,7 +131,7 @@ for channel in ch: #LINK CHANNELS~
     channel.cfilter.link(channel.depay)
     channel.depay.link(channel.queue)
     channel.queue.link(channel.decode)
-    channel.decode.link(channel.fallback)
+    channel.decode.link(channel.fallback) 
     channel.testsrc.link(channel.novideotext)
     channel.novideotext.link(channel.fallback)
     channel.fallback.link(channel.scale)
