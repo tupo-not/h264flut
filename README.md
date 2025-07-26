@@ -1,7 +1,7 @@
 # h264flut
 
 pixelflut but with h264 and GStreamer<br><br>
-Default resolution is 800x600<br>
+Default per channel resolution is 800x600<br>
 Default codec is h264<br>
 Default channels count is 9<br>
 Currently no audio support<br>
