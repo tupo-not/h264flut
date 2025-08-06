@@ -6,16 +6,15 @@ listen_base_port = 5000
 listen_host = "0.0.0.0"
 server_listen_port = 5000
 server_listen_host = "::"
-nogui = True
+nogui = False
 bottomtext_str = "No NSFW plz | running by CHANGEME and Gstreamer"
 novideotext_str = "NOVIDEO0)0))"
 toptext_font = "impact"
 bottomtext_font = "impact"
 novideotext_font = "arial"
 resize_cups = "video/x-raw,width=800,height=600,pixel-aspect-ratio=(fraction)1/1"
-h264_caps = "application/x-rtp,media=video,encoding-name=H264,payload=96"
 fallback_timeout = 1 #seconds!11!!!!
-channels = 9
+channels = 1
 
 Gst.init(None)
 pipeline = Gst.Pipeline.new("h264flut_multichannel")
@@ -25,18 +24,26 @@ class GstChannel:
         self.id = ch_id
         self.name_suffix = f"_ch{ch_id}"
         self.udpsrc = self.make("udpsrc", "udp")
-        self.cfilter = self.make("capsfilter", "cfilter")
-        self.depay = self.make("rtph264depay", "depay")
-        self.parse = self.make("h264parse", "parse")
-        self.queue = self.make("queue", "que")
-        self.decode = self.make("avdec_h264", "decode")
+        self.tsparse = self.make("tsparse", "tsparse")
+        self.tsdemux = self.make("tsdemux", "tsdemux")
+        self.vqueue = self.make("queue", "que")
+        self.h264parse = self.make("h264parse", "h264parse")
+        self.h264dec = self.make("avdec_h264", "h264dec")
         self.scale = self.make("videoconvertscale", "scale")
         self.rescale = self.make("capsfilter", "rescale")
         self.fallback = self.make("fallbackswitch", "fallback")
         self.imgfrz = self.make("imagefreeze", "imgfrz")
         self.toptext = self.make("textoverlay", "toptext")
         self.testsrc = self.make("videotestsrc", "testsrc")
-        self.novideotext = self.make("textoverlay","novideotext")
+        self.novideotext = self.make("timeoverlay","novideotext")
+
+        self.aqueue = self.make("queue","aqueue")
+        self.aacparse = self.make("aacparse","aacparse")
+        self.aac_dec = self.make("avdec_aac","avdec_aac")
+        self.audioconvert = self.make("audioconvert","audioconvert")
+        self.audioresample = self.make("audioresample","audioresample")
+        self.afallback = self.make("fallbackswitch", "afallback")
+        self.atestsrc = self.make("audiotestsrc", "atestsrc")
 
     def make(self, factory_name, prefix):
         name = f"{prefix}{self.name_suffix}"
@@ -47,6 +54,7 @@ ch = [GstChannel(i) for i in range(channels)]
 toptext = Gst.ElementFactory.make("textoverlay","toptext")
 bottomtext = Gst.ElementFactory.make("textoverlay","bottomtext")
 videomixer = Gst.ElementFactory.make("videomixer","videomixer")
+audiomixer = Gst.ElementFactory.make("audiomixer","audiomixer")
 convert = Gst.ElementFactory.make("videoconvert","convert")
 
 if nogui:
@@ -56,15 +64,26 @@ if nogui:
     output.set_property("host",server_listen_host)
 else:
     output = Gst.ElementFactory.make("autovideosink","GUI_output")
+    aoutput = Gst.ElementFactory.make("autoaudiosink","audio_output")
 
 #setup uall
+def on_pad_added(demux, pad, queue):
+    name = pad.get_property("template").name_template
+    print(name)
+    if name.startswith("video"):
+        pad.link(queue.get_static_pad("sink"))
+    elif name.startswith("audio"):
+        pad.link(queue.get_static_pad("sink"))
+
 i = 0
 for channel in ch:
-    channel.cfilter.set_property("caps", Gst.Caps.from_string(h264_caps))
     i += 1
     channel.udpsrc.set_property("port",listen_base_port+(i-1))
     channel.udpsrc.set_property("uri",f"udp://{listen_host}:{listen_base_port+(i-1)}")
-    channel.queue.set_property("leaky",2)
+ #   channel.vqueue.set_property("leaky",2)
+ #   channel.aqueue.set_property("leaky",2)
+    channel.vqueue.set_property("max-size-time", 5000000000)
+    channel.aqueue.set_property("max-size-time", 5000000000)
     channel.rescale.set_property("caps",Gst.Caps.from_string(resize_cups))
     channel.imgfrz.set_property("is-live",True)
     channel.imgfrz.set_property("allow-replace",True)
@@ -80,7 +99,7 @@ for channel in ch:
     channel.testsrc.set_property("pattern",2)
     channel.testsrc.set_property("is-live",True)
     channel.novideotext.set_property("font-desc",novideotext_font)
-    channel.novideotext.set_property("text",novideotext_str)
+    #channel.novideotext.set_property("text",novideotext_str)
     channel.novideotext.set_property("auto-resize",False)
     channel.novideotext.set_property("halignment",5)
     channel.novideotext.set_property("valignment",5)
@@ -118,18 +137,23 @@ for channel in ch:
 pipeline.add(convert)
 pipeline.add(bottomtext)
 pipeline.add(videomixer)
+pipeline.add(audiomixer)
 pipeline.add(output)
+pipeline.add(aoutput)
 
 if nogui:
     pipeline.add(mjpeg_encode)
 
+#link uall
 for channel in ch:
-    channel.udpsrc.link(channel.cfilter)
-    channel.cfilter.link(channel.depay)
-    channel.depay.link(channel.parse)
-    channel.parse.link(channel.queue)
-    channel.queue.link(channel.decode)
-    channel.decode.link(channel.fallback) 
+    channel.tsdemux.connect("pad-added", on_pad_added, channel.vqueue)
+    channel.tsdemux.connect("pad-added", on_pad_added, channel.aqueue)
+    channel.udpsrc.link(channel.tsparse)
+    channel.tsparse.link(channel.tsdemux)
+    #channel.tsdemux.link(channel.parse)
+    channel.vqueue.link(channel.h264parse)
+    channel.h264parse.link(channel.h264dec)
+    channel.h264dec.link(channel.fallback) 
     channel.testsrc.link(channel.novideotext)
     channel.novideotext.link(channel.fallback)
     channel.fallback.link(channel.scale)
@@ -137,6 +161,14 @@ for channel in ch:
     channel.rescale.link(channel.imgfrz)
     channel.imgfrz.link(channel.toptext)
     channel.toptext.link(videomixer)
+
+    channel.aqueue.link(channel.aacparse)
+    channel.aacparse.link(channel.aac_dec)
+    channel.aac_dec.link(channel.audioconvert)
+    channel.audioconvert.link(channel.afallback)
+    #channel.audioresample.link(channel.afallback)
+    channel.afallback.link(audiomixer)
+    channel.atestsrc.link(channel.afallback)
     
 if nogui:
     videomixer.link(convert)
@@ -147,20 +179,33 @@ else:
     videomixer.link(convert)
     convert.link(bottomtext)
     bottomtext.link(output)
+    audiomixer.link(aoutput)
 
 
-def handle_gstreamer_message(_bus: Gst.Bus, message: Gst.Message, loop: GLib.MainLoop): #debug
-    message_type = message.type
-    if message_type == Gst.MessageType.ERROR:
+def handle_gstreamer_message(bus, message, loop):
+    t = message.type
+    if t == Gst.MessageType.ERROR:
         err, debug = message.parse_error()
-        print(err, debug)
+        print(f"Error: {err}, {debug}")
+        loop.quit()
+    elif t == Gst.MessageType.EOS:
+        print("End of stream")
+        loop.quit()
+    elif t == Gst.MessageType.STATE_CHANGED:
+        old, new, pending = message.parse_state_changed()
+        print(f"State changed from {old} to {new}")
+    return True
+
 
 try:
     bus = pipeline.get_bus()
     bus.add_signal_watch()
     pipeline.set_state(Gst.State.PLAYING)
     loop = GLib.MainLoop()
-    bus.connect('message', handle_gstreamer_message, loop)
+    bus.connect("message", handle_gstreamer_message, loop)
+    Gst.debug_bin_to_dot_file_with_ts(pipeline, Gst.DebugGraphDetails.ALL, "pipeline")
+    #Gst.debug_set_active(False)
+    #Gst.debug_set_default_threshold(4)
     loop.run()
 except KeyboardInterrupt:
     print("\nStopping...")
