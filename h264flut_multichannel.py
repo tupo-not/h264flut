@@ -4,7 +4,6 @@ from gi.repository import Gst, GLib
 import sys
 import threading
 
-# Конфигурация
 listen_base_port = 5000
 listen_host = "0.0.0.0"
 server_listen_port = 5000
@@ -43,7 +42,7 @@ class GstChannel:
         self.novideotext = self.make("textoverlay", "novideotext")
         self.afallback = self.make("fallbackswitch", "afallback")
         self.atestsrc = self.make("audiotestsrc", "atestsrc")
-        
+
         self.aqueue = self.make("queue", "aqueue")
         self.aacparse = self.make("aacparse", "aacparse")
         self.aac_dec = self.make("avdec_aac", "avdec_aac")
@@ -114,12 +113,11 @@ def on_pad_added(demux, pad, channel):
 for i, channel in enumerate(ch):
     channel.udpsrc.set_property("port", listen_base_port + i)
     channel.udpsrc.set_property("uri", f"udp://{listen_host}:{listen_base_port + i}")
-    channel.udpsrc.set_property("buffer-size", 2097152)  # 2MB
-    channel.udpsrc.set_property("timeout", 5000000000)  # 5 seconds
+    channel.udpsrc.set_property("timeout", 5000000000)
     channel.tsdemux.connect("pad-added", on_pad_added, channel)
     channel.vqueue.set_property("max-size-buffers", 0)
     channel.vqueue.set_property("max-size-bytes", 0)
-    channel.vqueue.set_property("max-size-time", 2000000000)  # 2 seconds
+    channel.vqueue.set_property("max-size-time", 2000000000)
     channel.vqueue.set_property("leaky", 2)
     channel.aqueue.set_property("max-size-buffers", 0)
     channel.aqueue.set_property("max-size-bytes", 0)
@@ -131,7 +129,7 @@ for i, channel in enumerate(ch):
     channel.imgfrz.set_property("is-live", True)
     channel.imgfrz.set_property("allow-replace", True)
     channel.toptext.set_property("font-desc",toptext_font)
-    channel.toptext.set_property("text",f"CH_{i-1}")
+    channel.toptext.set_property("text",f"CH_{i}")
     channel.toptext.set_property("auto-resize",False)
     channel.toptext.set_property("halignment",5)
     channel.toptext.set_property("valignment",5)
@@ -149,7 +147,7 @@ for i, channel in enumerate(ch):
     channel.novideotext.set_property("xpos",0.5)
     channel.novideotext.set_property("ypos",0.5)
     channel.atestsrc.set_property("is-live", True)
-    channel.atestsrc.set_property("wave", 4)  # silence
+    channel.atestsrc.set_property("wave", 4)
 
 bottomtext.set_property("font-desc",bottomtext_font)
 bottomtext.set_property("text",bottomtext_str)
@@ -172,7 +170,6 @@ for i in range(channels):
     pad.set_property("xpos", x)
     pad.set_property("ypos", y)
 
-# Add elements to pipeline
 for channel in ch:
     for attr_name, element in vars(channel).items():
         if isinstance(element, Gst.Element) and element is not None:
@@ -191,11 +188,8 @@ else:
 
 #link uall
 for channel in ch:
-    # Input chain
     channel.udpsrc.link(channel.tsparse)
     channel.tsparse.link(channel.tsdemux)
-    
-    # Video chain
     channel.vqueue.link(channel.h264parse)
     channel.h264parse.link(channel.h264dec)
     channel.h264dec.link(channel.fallback)
