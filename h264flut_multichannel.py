@@ -14,7 +14,7 @@ novideotext_str = "NOVIDEO0)0))"
 toptext_font = "impact"
 bottomtext_font = "impact"
 novideotext_font = "arial"
-resize_caps = "video/x-raw,width=800,height=600,pixel-aspect-ratio=(fraction)1/1"
+resize_caps = "video/x-raw,width=800,height=600,pixel-aspect-ratio=(fraction)1/1,format=AYUV"
 fallback_timeout = 1  # seconds
 channels = 9
 
@@ -27,6 +27,7 @@ class GstChannel:
         self.name_suffix = f"_ch{ch_id}"
         self.pad_lock = threading.Lock()
         self.udpsrc = self.make("udpsrc", "udp")
+        self.iqueue = self.make("queue","iqueue")
         self.tsparse = self.make("tsparse", "tsparse")
         self.tsdemux = self.make("tsdemux", "tsdemux")
         self.vqueue = self.make("queue", "vqueue")
@@ -37,9 +38,11 @@ class GstChannel:
         self.fallback = self.make("fallbackswitch", "fallback")
         self.imgfrz = self.make("imagefreeze", "imgfrz")
         self.toptext = self.make("textoverlay", "toptext")
-
+        self.prerescale_blank = self.make("videoscale", "scale_blank")
+        self.rescale_blank = self.make("capsfilter", "rescale_blank")
         self.testsrc = self.make("videotestsrc", "testsrc")
         self.novideotext = self.make("textoverlay", "novideotext")
+
         self.afallback = self.make("fallbackswitch", "afallback")
         self.atestsrc = self.make("audiotestsrc", "atestsrc")
 
@@ -115,19 +118,21 @@ for i, channel in enumerate(ch):
     channel.udpsrc.set_property("uri", f"udp://{listen_host}:{listen_base_port + i}")
     channel.udpsrc.set_property("timeout", 5000000000)
     channel.tsdemux.connect("pad-added", on_pad_added, channel)
-    channel.vqueue.set_property("max-size-buffers", 0)
-    channel.vqueue.set_property("max-size-bytes", 0)
-    channel.vqueue.set_property("max-size-time", 2000000000)
+
+    channel.vqueue.set_property("max-size-time", 200000000)
     channel.vqueue.set_property("leaky", 2)
-    channel.aqueue.set_property("max-size-buffers", 0)
-    channel.aqueue.set_property("max-size-bytes", 0)
-    channel.aqueue.set_property("max-size-time", 2000000000)
+    channel.aqueue.set_property("max-size-time", 200000000)
     channel.aqueue.set_property("leaky", 2)
-    channel.h264parse.set_property("config-interval", -1)
-    channel.h264parse.set_property("disable-passthrough", True)
+
+#    channel.h264parse.set_property("config-interval", -1)
+#    channel.h264parse.set_property("disable-passthrough", True)
+
     channel.rescale.set_property("caps", Gst.Caps.from_string(resize_caps))
+    channel.rescale_blank.set_property("caps", Gst.Caps.from_string(resize_caps))
+
     channel.imgfrz.set_property("is-live", True)
     channel.imgfrz.set_property("allow-replace", True)
+
     channel.toptext.set_property("font-desc",toptext_font)
     channel.toptext.set_property("text",f"CH_{i}")
     channel.toptext.set_property("auto-resize",False)
@@ -135,10 +140,15 @@ for i, channel in enumerate(ch):
     channel.toptext.set_property("valignment",5)
     channel.toptext.set_property("xpos",0.8)
     channel.toptext.set_property("ypos",0.018)
+
     channel.fallback.set_property("immediate-fallback", True)
     channel.fallback.set_property("timeout", fallback_timeout * 1000000000)
     channel.testsrc.set_property("pattern", 2)
+    channel.atestsrc.set_property("wave", 4)
     channel.testsrc.set_property("is-live", True)
+    channel.atestsrc.set_property("is-live", True)
+
+
     channel.novideotext.set_property("font-desc",novideotext_font)
     channel.novideotext.set_property("text",novideotext_str)
     channel.novideotext.set_property("auto-resize",False)
@@ -146,8 +156,7 @@ for i, channel in enumerate(ch):
     channel.novideotext.set_property("valignment",5)
     channel.novideotext.set_property("xpos",0.5)
     channel.novideotext.set_property("ypos",0.5)
-    channel.atestsrc.set_property("is-live", True)
-    channel.atestsrc.set_property("wave", 4)
+
 
 bottomtext.set_property("font-desc",bottomtext_font)
 bottomtext.set_property("text",bottomtext_str)
@@ -188,14 +197,16 @@ else:
 
 #link uall
 for channel in ch:
-    channel.udpsrc.link(channel.tsparse)
+    channel.udpsrc.link(channel.iqueue)
+    channel.iqueue.link(channel.tsparse)
     channel.tsparse.link(channel.tsdemux)
     channel.vqueue.link(channel.h264parse)
     channel.h264parse.link(channel.h264dec)
-    channel.h264dec.link(channel.fallback)
-    channel.fallback.link(channel.prerescale)
+    channel.h264dec.link(channel.prerescale)
     channel.prerescale.link(channel.rescale)
-    channel.rescale.link(channel.imgfrz)
+    channel.rescale.link(channel.fallback)
+    #channel.vconvert.link(channel.fallback)
+    channel.fallback.link(channel.imgfrz)
     channel.imgfrz.link(channel.toptext)
     channel.toptext.link(videomixer)
 
@@ -207,7 +218,9 @@ for channel in ch:
     channel.afallback.link(audiomixer)
 
     channel.atestsrc.link(channel.afallback)
-    channel.testsrc.link(channel.novideotext)
+    channel.testsrc.link(channel.prerescale_blank)
+    channel.prerescale_blank.link(channel.rescale_blank)
+    channel.rescale_blank.link(channel.novideotext)
     channel.novideotext.link(channel.fallback)
 
 if nogui:
@@ -253,7 +266,8 @@ try:
     loop.run()
     
 except KeyboardInterrupt:
-    print("\nStopping...")
+    print("\nStopping & dumping pipeline...")
+    Gst.debug_bin_to_dot_file(pipeline, Gst.DebugGraphDetails.ALL, "pipeline")
 except Exception as e:
     print(f"Error: {e}")
     import traceback
