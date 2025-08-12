@@ -15,8 +15,8 @@ toptext_font = "impact"
 bottomtext_font = "impact"
 novideotext_font = "arial"
 resize_caps = "video/x-raw,width=800,height=600,pixel-aspect-ratio=(fraction)1/1,format=AYUV"
-fallback_timeout = 1  # seconds
-channels = 9
+fallback_timeout = 1 # seconds
+channels = 1
 
 Gst.init(None)
 pipeline = Gst.Pipeline.new("h264flut_multichannel")
@@ -28,11 +28,7 @@ class GstChannel:
         self.pad_lock = threading.Lock()
         self.udpsrc = self.make("udpsrc", "udp")
         self.iqueue = self.make("queue","iqueue")
-        self.tsparse = self.make("tsparse", "tsparse")
-        self.tsdemux = self.make("tsdemux", "tsdemux")
-        self.vqueue = self.make("queue", "vqueue")
-        self.h264parse = self.make("h264parse", "h264parse")
-        self.h264dec = self.make("avdec_h264", "h264dec")
+        self.decodebin = self.make("decodebin3", "decodebin3")
         self.prerescale = self.make("videoconvertscale", "scale")
         self.rescale = self.make("capsfilter", "rescale")
         self.fallback = self.make("fallbackswitch", "fallback")
@@ -46,9 +42,6 @@ class GstChannel:
         self.afallback = self.make("fallbackswitch", "afallback")
         self.atestsrc = self.make("audiotestsrc", "atestsrc")
 
-        self.aqueue = self.make("queue", "aqueue")
-        self.aacparse = self.make("aacparse", "aacparse")
-        self.aac_dec = self.make("avdec_aac", "avdec_aac")
         self.audioconvert = self.make("audioconvert", "audioconvert")
         self.audioresample = self.make("audioresample", "audioresample")
 
@@ -77,55 +70,21 @@ if nogui:
     output.set_property("host", server_listen_host)
 else:
     output = Gst.ElementFactory.make("autovideosink", "GUI_output")
-    aoutput = Gst.ElementFactory.make("autoaudiosink", "audio_output")
+    aoutput = Gst.ElementFactory.make("alsasink", "audio_output")
 
 def on_pad_added(demux, pad, channel):
-    with channel.pad_lock:
-        pad_name = pad.get_name()
-        pad_caps = pad.get_current_caps()
-        
-        if pad_caps:
-            structure = pad_caps.get_structure(0)
-            name = structure.get_name()
-        else:
-            template = pad.get_property("template")
-            name = template.name_template if template else ""
-        
-        print(f"New pad: {pad_name}, type: {name}")
-        
-        if "video" in pad_name and not channel.video_pad_linked:
-            sink_pad = channel.vqueue.get_static_pad("sink")
-            if sink_pad and not sink_pad.is_linked():
-                result = pad.link(sink_pad)
-                if result == Gst.PadLinkReturn.OK:
-                    channel.video_pad_linked = True
-                    print(f"Successfully linked video pad for channel {channel.id}")
-                else:
-                    print(f"Failed to link video pad: {result}")
-                    
-        elif "audio" in pad_name and not channel.audio_pad_linked:
-            sink_pad = channel.aqueue.get_static_pad("sink")
-            if sink_pad and not sink_pad.is_linked():
-                result = pad.link(sink_pad)
-                if result == Gst.PadLinkReturn.OK:
-                    channel.audio_pad_linked = True
-                    print(f"Successfully linked audio pad for channel {channel.id}")
-                else:
-                    print(f"Failed to link audio pad: {result}")
+    name = pad.get_property("template").name_template
+    print(name)
+    if name.startswith("video"):
+        pad.link(channel.prerescale.get_static_pad("sink"))
+    elif name.startswith("audio"):
+        pad.link(channel.audioconvert.get_static_pad("sink"))
 
 for i, channel in enumerate(ch):
     channel.udpsrc.set_property("port", listen_base_port + i)
     channel.udpsrc.set_property("uri", f"udp://{listen_host}:{listen_base_port + i}")
     channel.udpsrc.set_property("timeout", 5000000000)
-    channel.tsdemux.connect("pad-added", on_pad_added, channel)
-
-    channel.vqueue.set_property("max-size-time", 200000000)
-    channel.vqueue.set_property("leaky", 2)
-    channel.aqueue.set_property("max-size-time", 200000000)
-    channel.aqueue.set_property("leaky", 2)
-
-#    channel.h264parse.set_property("config-interval", -1)
-#    channel.h264parse.set_property("disable-passthrough", True)
+    channel.decodebin.connect("pad-added", on_pad_added, channel)
 
     channel.rescale.set_property("caps", Gst.Caps.from_string(resize_caps))
     channel.rescale_blank.set_property("caps", Gst.Caps.from_string(resize_caps))
@@ -198,27 +157,20 @@ else:
 #link uall
 for channel in ch:
     channel.udpsrc.link(channel.iqueue)
-    channel.iqueue.link(channel.tsparse)
-    channel.tsparse.link(channel.tsdemux)
-    channel.vqueue.link(channel.h264parse)
-    channel.h264parse.link(channel.h264dec)
-    channel.h264dec.link(channel.prerescale)
+    channel.iqueue.link(channel.decodebin)
     channel.prerescale.link(channel.rescale)
     channel.rescale.link(channel.fallback)
-    #channel.vconvert.link(channel.fallback)
     channel.fallback.link(channel.imgfrz)
     channel.imgfrz.link(channel.toptext)
     channel.toptext.link(videomixer)
 
-    channel.aqueue.link(channel.aacparse)
-    channel.aacparse.link(channel.aac_dec)
-    channel.aac_dec.link(channel.audioconvert)
     channel.audioconvert.link(channel.audioresample)
     channel.audioresample.link(channel.afallback)
     channel.afallback.link(audiomixer)
 
     channel.atestsrc.link(channel.afallback)
     channel.testsrc.link(channel.prerescale_blank)
+
     channel.prerescale_blank.link(channel.rescale_blank)
     channel.rescale_blank.link(channel.novideotext)
     channel.novideotext.link(channel.fallback)
@@ -234,35 +186,10 @@ else:
     bottomtext.link(output)
     audiomixer.link(aoutput)
 
-def handle_gstreamer_message(bus, message, loop):
-    t = message.type
-    if t == Gst.MessageType.ERROR:
-        err, debug = message.parse_error()
-        print(f"Error from {message.src.get_name()}: {err}, {debug}")
-        loop.quit()
-    elif t == Gst.MessageType.EOS:
-        print("End of stream")
-        loop.quit()
-    elif t == Gst.MessageType.WARNING:
-        warn, debug = message.parse_warning()
-        print(f"Warning from {message.src.get_name()}: {warn}, {debug}")
-    return True
-
 try:
-    bus = pipeline.get_bus()
-    bus.add_signal_watch()
-    
-    print("Starting pipeline...")
     ret = pipeline.set_state(Gst.State.PLAYING)
-    
-    if ret == Gst.StateChangeReturn.FAILURE:
-        print("Failed to start pipeline")
-        sys.exit(1)
-    
     loop = GLib.MainLoop()
-    bus.connect("message", handle_gstreamer_message, loop)
-    
-    print("Pipeline running...")
+    #bus.connect("message", handle_gstreamer_message, loop)
     loop.run()
     
 except KeyboardInterrupt:
@@ -274,4 +201,5 @@ except Exception as e:
     traceback.print_exc()
 finally:
     print("Cleaning up...")
+    Gst.debug_bin_to_dot_file(pipeline, Gst.DebugGraphDetails.ALL, "pipeline")
     pipeline.set_state(Gst.State.NULL)
