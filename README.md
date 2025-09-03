@@ -7,6 +7,7 @@ Default audio codec is AAC<br>
 Default channels count is 9<br>
 pls use multichannel version, its fun:D
 <br>
+current status: LAGodrom
 
 ## How it works<br>
 
