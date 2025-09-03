@@ -19,7 +19,7 @@ fallback_timeout = 1  # seconds
 channels = 9
 
 Gst.init(None)
-pipeline = Gst.Pipeline.new("flv_udp_multichannel")
+pipeline = Gst.Pipeline.new("h264flut_multichannel")
 
 class GstChannel:
     def __init__(self, ch_id: int):
@@ -29,7 +29,7 @@ class GstChannel:
         # Video
         self.udpsrc = self.make("udpsrc", "udp")
         self.iqueue = self.make("queue","iqueue")
-        #self.flvparse = self.make("flvparse", "flvparse")
+        self.tsparse = self.make("tsparse", "tsparse")
         self.decodebin = self.make("decodebin3", "decodebin3")
         self.prerescale = self.make("videoconvertscale", "scale")
         self.rescale = self.make("capsfilter", "rescale")
@@ -169,23 +169,22 @@ else:
 
 # Линки
 for channel in ch:
-    channel.udpsrc.link(channel.iqueue)
+    channel.udpsrc.link(channel.tsparse)
+    channel.tsparse.link(channel.iqueue)
     channel.iqueue.link(channel.decodebin)
-    # Video
+
     channel.prerescale.link(channel.rescale)
     channel.rescale.link(channel.fallback)
     channel.fallback.link(channel.imgfrz)
     channel.imgfrz.link(channel.vqueue)
     channel.vqueue.link(channel.toptext)
     channel.toptext.link(videomixer)
-    # Audio
+
     channel.audioconvert.link(channel.audioqueue)
     channel.audioqueue.link(channel.audioresample)
     channel.audioresample.link(channel.afallback)
-    #channel.afallback.link(channel.aacenc)
     channel.afallback.link(audiomixer)
     channel.atestsrc.link(channel.afallback)
-    # Video fallback blank
     channel.testsrc.link(channel.prerescale_blank)
     channel.prerescale_blank.link(channel.rescale_blank)
     channel.rescale_blank.link(channel.novideotext)
