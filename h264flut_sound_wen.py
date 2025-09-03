@@ -2,14 +2,13 @@ import gi
 gi.require_version('Gst', '1.0')
 from gi.repository import Gst, GLib
 import sys
-import threading
 
 listen_base_port = 5000
 listen_host = "0.0.0.0"
 server_listen_port = 5000
 server_listen_host = "::"
-nogui = True
-bottomtext_str = "No NSFW plz | running by CHANGEME and Gstreamer"
+nogui = False
+bottomtext_str = "No NSFW plz | running by CHANGEME, God's word and Gstreamer"
 novideotext_str = "NOVIDEO0)0))"
 toptext_font = "impact"
 bottomtext_font = "impact"
@@ -169,8 +168,6 @@ else:
     pipeline.add(mpegts_mux)
     pipeline.add(h264_enc)
     pipeline.add(aac_enc)
-#    pipeline.add(aq1)
-#    pipeline.add(aq2)
     pipeline.add(vq1)
     pipeline.add(vq2)
 
@@ -200,8 +197,6 @@ for channel in ch:
     if nogui:
         pipeline.remove(audiomixer)
         channel.afallback.link(channel.aacenc)
-        #channel.afallback.link(channel.ainqueue)
-        #channel.ainqueue.link(channel.aacenc)
         channel.aacenc.link(channel.aoutqueue)
         channel.aoutqueue.link(mpegts_mux)
     else:
@@ -212,7 +207,6 @@ if nogui:
     convert.link(bottomtext)
     bottomtext.link(h264_enc)
     h264_enc.link(vq1)
-    #h264_enc.link(mpegts_mux)
     vq1.link(mpegts_mux)
     mpegts_mux.link(vq2)
     vq2.link(output)

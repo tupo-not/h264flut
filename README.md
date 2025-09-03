@@ -5,9 +5,10 @@ Default per channel resolution is 800x600<br>
 Default codec is h264<br>
 Default audio codec is AAC<br>
 Default channels count is 9<br>
-pls use multichannel version, its fun:D
+pls use multichannel version, its fun:D<br>
 <br>
-current status: LAGodrom
+current status: LAGodrom<br>
+separated audio track by each channel<br>
 
 ## How it works<br>
 
