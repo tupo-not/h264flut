@@ -41,6 +41,7 @@ class GstChannel:
         self.testsrc = self.make("videotestsrc", "testsrc")
         self.novideotext = self.make("textoverlay", "novideotext")
         self.vqueue = self.make("queue", "vqueue")
+        self.voutqueue = self.make("queue", "voutqueue")
 
         # Audio
         self.audioconvert = self.make("audioconvert", "audioconvert")
@@ -48,9 +49,9 @@ class GstChannel:
         self.afallback = self.make("fallbackswitch", "afallback")
         self.atestsrc = self.make("audiotestsrc", "atestsrc")
         self.audioqueue = self.make("queue", "audioqueue")
-        #self.atee = self.make("tee", "audio_tee") 
-        #self.aacenc = self.make("faac", "output_aac_enc")
-        #self.aoutqueue = self.make("queue", "aoutqueue")
+        self.aacenc = self.make("faac", "output_aac_enc")
+        self.aoutqueue = self.make("queue", "aoutqueue")
+        self.ainqueue = self.make("queue", "ainqueue")
 
     def make(self, factory_name, prefix):
         name = f"{prefix}{self.name_suffix}"
@@ -95,7 +96,9 @@ def on_pad_added(demux, pad, channel):
 for i, channel in enumerate(ch):
     channel.udpsrc.set_property("port", listen_base_port + i)
     channel.udpsrc.set_property("timeout", 5000000000)
-
+    channel.ainqueue.set_property("leaky", 2)
+    channel.aoutqueue.set_property("leaky", 1)
+    channel.vqueue.set_property("leaky", 1)
     channel.decodebin.connect("pad-added", on_pad_added, channel)
 
     channel.rescale.set_property("caps", Gst.Caps.from_string(resize_caps))
@@ -136,6 +139,10 @@ bottomtext.set_property("halignment",5)
 bottomtext.set_property("valignment",5)
 bottomtext.set_property("xpos",0.5)
 bottomtext.set_property("ypos",0.98)
+vq1.set_property("leaky", 2)
+vq2.set_property("leaky", 2)
+aq1.set_property("leaky", 2)
+aq2.set_property("leaky", 2)
 
 cols = int(channels ** 0.5) + (1 if channels ** 0.5 % 1 else 0)
 for i in range(channels):
@@ -162,16 +169,16 @@ else:
     pipeline.add(mpegts_mux)
     pipeline.add(h264_enc)
     pipeline.add(aac_enc)
-    pipeline.add(aq1)
-    pipeline.add(aq2)
+#    pipeline.add(aq1)
+#    pipeline.add(aq2)
     pipeline.add(vq1)
     pipeline.add(vq2)
 
 # Линки
 for channel in ch:
-    channel.udpsrc.link(channel.tsparse)
-    channel.tsparse.link(channel.iqueue)
-    channel.iqueue.link(channel.decodebin)
+    channel.udpsrc.link(channel.iqueue)
+    channel.iqueue.link(channel.tsparse)
+    channel.tsparse.link(channel.decodebin)
 
     channel.prerescale.link(channel.rescale)
     channel.rescale.link(channel.fallback)
@@ -183,27 +190,29 @@ for channel in ch:
     channel.audioconvert.link(channel.audioqueue)
     channel.audioqueue.link(channel.audioresample)
     channel.audioresample.link(channel.afallback)
-    channel.afallback.link(audiomixer)
     channel.atestsrc.link(channel.afallback)
+    
     channel.testsrc.link(channel.prerescale_blank)
     channel.prerescale_blank.link(channel.rescale_blank)
     channel.rescale_blank.link(channel.novideotext)
     channel.novideotext.link(channel.fallback)
 
-#    if nogui:
-       # channel.atee.link(channel.aacenc)
-        #channel.aoutqueue.link(channel.aacenc)
-        #channel.aacenc.link(mpegts_mux)
+    if nogui:
+        pipeline.remove(audiomixer)
+        channel.afallback.link(channel.aacenc)
+        #channel.afallback.link(channel.ainqueue)
+        #channel.ainqueue.link(channel.aacenc)
+        channel.aacenc.link(channel.aoutqueue)
+        channel.aoutqueue.link(mpegts_mux)
+    else:
+        channel.afallback.link(audiomixer)
 
 if nogui:
     videomixer.link(convert)
     convert.link(bottomtext)
     bottomtext.link(h264_enc)
-    audiomixer.link(aq1)
-    aq1.link(aac_enc)
-    aac_enc.link(aq2)
-    aq2.link(mpegts_mux)
     h264_enc.link(vq1)
+    #h264_enc.link(mpegts_mux)
     vq1.link(mpegts_mux)
     mpegts_mux.link(vq2)
     vq2.link(output)
