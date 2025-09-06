@@ -2,33 +2,32 @@ import gi
 gi.require_version('Gst', '1.0')
 from gi.repository import Gst, GLib
 import sys
+import threading
 
 listen_base_port = 5000
 listen_host = "0.0.0.0"
 server_listen_port = 5000
 server_listen_host = "::"
 nogui = False
-bottomtext_str = "No NSFW plz | running by CHANGEME, God's word and Gstreamer"
+bottomtext_str = "No NSFW plz | running by CHANGEME and Gstreamer"
 novideotext_str = "NOVIDEO0)0))"
 toptext_font = "impact"
 bottomtext_font = "impact"
 novideotext_font = "arial"
 resize_caps = "video/x-raw,width=800,height=600,pixel-aspect-ratio=(fraction)1/1,format=AYUV"
-fallback_timeout = 1  # seconds
-channels = 9
+fallback_timeout = 1 # seconds
+channels = 1
 
 Gst.init(None)
-pipeline = Gst.Pipeline.new("h264flut_multichannel")
+pipeline = Gst.Pipeline.new("h264flut_multichannel_legacy")
 
 class GstChannel:
     def __init__(self, ch_id: int):
         self.id = ch_id
         self.name_suffix = f"_ch{ch_id}"
-
-        # Video
+        self.pad_lock = threading.Lock()
         self.udpsrc = self.make("udpsrc", "udp")
         self.iqueue = self.make("queue","iqueue")
-        self.tsparse = self.make("tsparse", "tsparse")
         self.decodebin = self.make("decodebin3", "decodebin3")
         self.prerescale = self.make("videoconvertscale", "scale")
         self.rescale = self.make("capsfilter", "rescale")
@@ -39,18 +38,15 @@ class GstChannel:
         self.rescale_blank = self.make("capsfilter", "rescale_blank")
         self.testsrc = self.make("videotestsrc", "testsrc")
         self.novideotext = self.make("textoverlay", "novideotext")
-        self.vqueue = self.make("queue", "vqueue")
-        self.voutqueue = self.make("queue", "voutqueue")
 
-        # Audio
-        self.audioconvert = self.make("audioconvert", "audioconvert")
-        self.audioresample = self.make("audioresample", "audioresample")
         self.afallback = self.make("fallbackswitch", "afallback")
         self.atestsrc = self.make("audiotestsrc", "atestsrc")
-        self.audioqueue = self.make("queue", "audioqueue")
-        self.aacenc = self.make("faac", "output_aac_enc")
-        self.aoutqueue = self.make("queue", "aoutqueue")
-        self.ainqueue = self.make("queue", "ainqueue")
+
+        self.audioconvert = self.make("audioconvert", "audioconvert")
+        self.audioresample = self.make("audioresample", "audioresample")
+
+        self.video_pad_linked = False
+        self.audio_pad_linked = False
 
     def make(self, factory_name, prefix):
         name = f"{prefix}{self.name_suffix}"
@@ -61,20 +57,15 @@ class GstChannel:
         return element
 
 ch = [GstChannel(i) for i in range(channels)]
-
+toptext = Gst.ElementFactory.make("textoverlay", "toptext")
+bottomtext = Gst.ElementFactory.make("textoverlay", "bottomtext")
 videomixer = Gst.ElementFactory.make("videomixer", "videomixer")
 audiomixer = Gst.ElementFactory.make("audiomixer", "audiomixer")
 convert = Gst.ElementFactory.make("videoconvertscale", "convert")
 
 if nogui:
-    h264_enc = Gst.ElementFactory.make("openh264enc", "h264_enc")
-    aq1 = Gst.ElementFactory.make("queue", "aq1")
-    vq1 = Gst.ElementFactory.make("queue", "vq1")
-    aq2 = Gst.ElementFactory.make("queue", "aq2")
-    vq2 = Gst.ElementFactory.make("queue", "vq2")
-    aac_enc = Gst.ElementFactory.make("faac", "aac_enc")
-    mpegts_mux = Gst.ElementFactory.make("mpegtsmux", "mpegts_mux")
-    output = Gst.ElementFactory.make("tcpserversink", "nogui_output")
+    mjpeg_encode = Gst.ElementFactory.make("avenc_mjpeg", "mjpeg_encode")
+    output = Gst.ElementFactory.make("tcpserversink", "GUI_output")
     output.set_property("port", server_listen_port)
     output.set_property("host", server_listen_host)
 else:
@@ -82,22 +73,17 @@ else:
     aoutput = Gst.ElementFactory.make("alsasink", "audio_output")
 
 def on_pad_added(demux, pad, channel):
-    if pad.is_linked():
-        return
-    caps = pad.get_current_caps()
-    if not caps:
-        caps = pad.query_caps(None)
-    if caps.to_string().startswith("video"):
+    name = pad.get_property("template").name_template
+    print(name)
+    if name.startswith("video"):
         pad.link(channel.prerescale.get_static_pad("sink"))
-    elif caps.to_string().startswith("audio"):
+    elif name.startswith("audio"):
         pad.link(channel.audioconvert.get_static_pad("sink"))
 
 for i, channel in enumerate(ch):
     channel.udpsrc.set_property("port", listen_base_port + i)
+    channel.udpsrc.set_property("uri", f"udp://{listen_host}:{listen_base_port + i}")
     channel.udpsrc.set_property("timeout", 5000000000)
-    channel.ainqueue.set_property("leaky", 2)
-    channel.aoutqueue.set_property("leaky", 1)
-    channel.vqueue.set_property("leaky", 1)
     channel.decodebin.connect("pad-added", on_pad_added, channel)
 
     channel.rescale.set_property("caps", Gst.Caps.from_string(resize_caps))
@@ -116,11 +102,11 @@ for i, channel in enumerate(ch):
 
     channel.fallback.set_property("immediate-fallback", True)
     channel.fallback.set_property("timeout", fallback_timeout * 1000000000)
-
     channel.testsrc.set_property("pattern", 2)
-    channel.testsrc.set_property("is-live", True)
     channel.atestsrc.set_property("wave", 4)
+    channel.testsrc.set_property("is-live", True)
     channel.atestsrc.set_property("is-live", True)
+
 
     channel.novideotext.set_property("font-desc",novideotext_font)
     channel.novideotext.set_property("text",novideotext_str)
@@ -130,7 +116,7 @@ for i, channel in enumerate(ch):
     channel.novideotext.set_property("xpos",0.5)
     channel.novideotext.set_property("ypos",0.5)
 
-bottomtext = Gst.ElementFactory.make("textoverlay", "bottomtext")
+
 bottomtext.set_property("font-desc",bottomtext_font)
 bottomtext.set_property("text",bottomtext_str)
 bottomtext.set_property("auto-resize",False)
@@ -138,14 +124,15 @@ bottomtext.set_property("halignment",5)
 bottomtext.set_property("valignment",5)
 bottomtext.set_property("xpos",0.5)
 bottomtext.set_property("ypos",0.98)
-vq1.set_property("leaky", 2)
-vq2.set_property("leaky", 2)
-aq1.set_property("leaky", 2)
-aq2.set_property("leaky", 2)
 
+#silly matrix
 cols = int(channels ** 0.5) + (1 if channels ** 0.5 % 1 else 0)
+rows = (channels + cols - 1) // cols
+pads = []
+
 for i in range(channels):
     pad = videomixer.get_request_pad("sink_%u")
+    pads.append(pad)
     x = (i % cols) * 800
     y = (i // cols) * 600
     pad.set_property("xpos", x)
@@ -165,51 +152,34 @@ pipeline.add(output)
 if not nogui:
     pipeline.add(aoutput)
 else:
-    pipeline.add(mpegts_mux)
-    pipeline.add(h264_enc)
-    pipeline.add(aac_enc)
-    pipeline.add(vq1)
-    pipeline.add(vq2)
+    pipeline.add(mjpeg_encode)
 
-# Линки
+#link uall
 for channel in ch:
     channel.udpsrc.link(channel.iqueue)
-    channel.iqueue.link(channel.tsparse)
-    channel.tsparse.link(channel.decodebin)
-
+    channel.iqueue.link(channel.decodebin)
     channel.prerescale.link(channel.rescale)
     channel.rescale.link(channel.fallback)
     channel.fallback.link(channel.imgfrz)
-    channel.imgfrz.link(channel.vqueue)
-    channel.vqueue.link(channel.toptext)
+    channel.imgfrz.link(channel.toptext)
     channel.toptext.link(videomixer)
 
-    channel.audioconvert.link(channel.audioqueue)
-    channel.audioqueue.link(channel.audioresample)
+    channel.audioconvert.link(channel.audioresample)
     channel.audioresample.link(channel.afallback)
+    channel.afallback.link(audiomixer)
+
     channel.atestsrc.link(channel.afallback)
-    
     channel.testsrc.link(channel.prerescale_blank)
+
     channel.prerescale_blank.link(channel.rescale_blank)
     channel.rescale_blank.link(channel.novideotext)
     channel.novideotext.link(channel.fallback)
 
-    if nogui:
-        pipeline.remove(audiomixer)
-        channel.afallback.link(channel.aacenc)
-        channel.aacenc.link(channel.aoutqueue)
-        channel.aoutqueue.link(mpegts_mux)
-    else:
-        channel.afallback.link(audiomixer)
-
 if nogui:
     videomixer.link(convert)
     convert.link(bottomtext)
-    bottomtext.link(h264_enc)
-    h264_enc.link(vq1)
-    vq1.link(mpegts_mux)
-    mpegts_mux.link(vq2)
-    vq2.link(output)
+    bottomtext.link(mjpeg_encode)
+    mjpeg_encode.link(output)
 else:
     videomixer.link(convert)
     convert.link(bottomtext)
@@ -217,9 +187,11 @@ else:
     audiomixer.link(aoutput)
 
 try:
-    pipeline.set_state(Gst.State.PLAYING)
+    ret = pipeline.set_state(Gst.State.PLAYING)
     loop = GLib.MainLoop()
+    #bus.connect("message", handle_gstreamer_message, loop)
     loop.run()
+    
 except KeyboardInterrupt:
     print("\nStopping & dumping pipeline...")
     Gst.debug_bin_to_dot_file(pipeline, Gst.DebugGraphDetails.ALL, "pipeline")
