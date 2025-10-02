@@ -11,7 +11,7 @@ separated audio track by each channel<br>
 
 ## How it works<br>
 
-Client runs `ffmpeg -re -f lavfi -i testsrc -vf "scale=800:600" -c:v libx264 -f mpegts udp://A.B.C.D:5000 + (preffered number of channel)` (for example)<br>
+Client runs `ffmpeg -re -f lavfi -i testsrc -i cocojambo.mp3 -vf "scale=800:600" -c:v libx264 -c:a aac -f mpegts udp://A.B.C.D:5000 + (preffered number of channel)` (for example)<br>
 MPEG-TS H264 Traffic goes to `A.B.C.D:5003 (channel 3, counting from 0)`<br>
 GStreamer channel pipeline receives it, triggering fallback switch and shows video on its channel's output<br>
 If in 1 second(default) channel pipeline dont receive at least one frame, fallbackswitch shows `NOVIDEO0)0))`<br><br>
