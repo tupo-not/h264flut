@@ -23,4 +23,5 @@ gst-plugins-good<br>
 gst-plugins-base<br>
 gst-plugin-fallbackswitch<br>
 gst-libav<br>
-gst-python
+gst-python<br>
+archlinux rootfs
