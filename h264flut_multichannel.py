@@ -17,6 +17,8 @@ DEFAULTS = {
     "toptext_font": "impact",
     "bottomtext_font": "impact",
     "novideotext_font": "arial",
+    "ch_width" : 800,
+    "ch_height" : 600,
     "resize_caps": "video/x-raw,width=800,height=600,pixel-aspect-ratio=(fraction)1/1,format=AYUV",
     "fallback_timeout": 1,
     "channels": 9
@@ -48,6 +50,8 @@ parser.add_argument("--gui", action="store_false", help="GUI mode")
 parser.add_argument("--listen-base-port", type=int, help="Base UDP port")
 parser.add_argument("--server-listen-port", type=int, help="Server port")
 parser.add_argument("--channels", type=int, help="Number of channels")
+parser.add_argument("--ch_width", type=int, help="Channel Width", required=False)
+parser.add_argument("--ch_height", type=int, help="Channel Height", required=False)
 parser.add_argument("--bottomtext", type=str, help="Bottom text overlay")
 parser.add_argument("--novideotext", type=str, help="Text when no video")
 args = parser.parse_args()
@@ -62,7 +66,7 @@ novideotext_str = args.novideotext or get_config_option("text", "novideotext_str
 toptext_font = get_config_option("text", "toptext_font")
 bottomtext_font = get_config_option("text", "bottomtext_font")
 novideotext_font = get_config_option("text", "novideotext_font")
-resize_caps = get_config_option("video", "resize_caps")
+resize_caps = f"video/x-raw,width={args.ch_width or get_config_option("general","ch_width")},height={args.ch_height or get_config_option("general","ch_height")},pixel-aspect-ratio=(fraction)1/1,format=AYUV"
 fallback_timeout = get_config_option("general", "fallback_timeout")
 channels = args.channels or get_config_option("general", "channels")
 
@@ -187,19 +191,24 @@ bottomtext.set_property("halignment",5)
 bottomtext.set_property("valignment",5)
 bottomtext.set_property("xpos",0.5)
 bottomtext.set_property("ypos",0.98)
+
 if nogui:
     vq1.set_property("leaky", 2)
     vq2.set_property("leaky", 2)
     aq1.set_property("leaky", 2)
     aq2.set_property("leaky", 2)
 
+structure = Gst.Caps.from_string(resize_caps).get_structure(0)
+ch_w = structure.get_value("width")
+ch_h = structure.get_value("height")
 cols = int(channels ** 0.5) + (1 if channels ** 0.5 % 1 else 0)
 for i in range(channels):
     pad = videomixer.get_request_pad("sink_%u")
-    x = (i % cols) * 800
-    y = (i // cols) * 600
+    x = (i % cols) * ch_w
+    y = (i // cols) * ch_h
     pad.set_property("xpos", x)
     pad.set_property("ypos", y)
+
 
 for channel in ch:
     for attr_name, element in vars(channel).items():
@@ -266,6 +275,7 @@ else:
     bottomtext.link(output)
     audiomixer.link(aoutput)
 
+del listen_base_port, server_listen_port, server_listen_host,bottomtext_str, novideotext_str, toptext_font, bottomtext_font, novideotext_font, resize_caps, fallback_timeout, channels, nogui, listen_host
 try:
     pipeline.set_state(Gst.State.PLAYING)
     loop = GLib.MainLoop()
